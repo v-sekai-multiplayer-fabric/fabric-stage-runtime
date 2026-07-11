@@ -1,5 +1,7 @@
 # fabric-openusd-runtime
 
+Please note the origin of this project is https://github.com/Immersive-Data-Center-Management/idtx-flow.
+
 Prebuilt, per-triplet **OpenUSD runtime** (v26.05, monolithic `usd_ms` + headers +
 plugin registry) shipped as an Elixir/Hex package — so the `fabric-flow-openusd`
 adapters (Godot / Unity / Blender) and Elixir consumers (e.g. cloth-fit) **fetch**
