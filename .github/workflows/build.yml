@@ -1,0 +1,100 @@
+---
+name: build
+
+# Build the OpenUSD runtime natively per triplet and publish the prebuilt
+# archives. Each runner builds its own target (OpenUSD has no cross-compile
+# path); on a v26.05.* tag the archives + checksum.txt are attached to a release.
+
+# OpenUSD from source is ~40+ min per triplet, so this is manual / tag-driven
+# rather than on every push.
+on:
+    push:
+        tags: ['v26.05.*']
+    workflow_dispatch:
+
+env:
+    OTP_VERSION: '27'
+    ELIXIR_VERSION: '1.18'
+
+jobs:
+    build:
+        name: ${{ matrix.target }}
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 120
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - os: ubuntu-latest
+                      target: x86_64-linux-gnu
+                    - os: macos-latest
+                      target: aarch64-apple-darwin
+                    - os: windows-2022
+                      target: x86_64-windows-msvc
+        env:
+            OPENUSD_BUILD: '1'
+            OPENUSD_TARGET: ${{ matrix.target }}
+            OPENUSD_CACHE_DIR: ${{ github.workspace }}/dist
+            SCCACHE_GHA_ENABLED: 'true'
+            USE_SCCACHE: '1'
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: erlef/setup-beam@v1
+              with: { otp-version: '${{ env.OTP_VERSION }}', elixir-version: '${{ env.ELIXIR_VERSION }}' }
+
+            - uses: actions/setup-python@v5
+              with: { python-version: '3.12' }
+
+            - name: Install CMake (Linux)
+              if: runner.os == 'Linux'
+              run: sudo apt-get update && sudo apt-get install -y cmake
+
+            - name: Set up sccache
+              uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696
+
+            - name: Build OpenUSD runtime
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  mix local.hex --force && mix local.rebar --force
+                  mix deps.get
+                  mix compile
+
+            - name: Locate archive
+              id: arc
+              shell: bash
+              run: echo "path=dist/openusd-${OPENUSD_VERSION:-26.05}-${{ matrix.target }}.tar.gz" >> "$GITHUB_OUTPUT"
+
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: openusd-${{ matrix.target }}
+                  path: dist/openusd-*-${{ matrix.target }}.tar.gz
+                  if-no-files-found: error
+
+    release:
+        name: Release
+        needs: build
+        if: startsWith(github.ref, 'refs/tags/v26.05.')
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/download-artifact@v4
+              with: { path: artifacts, merge-multiple: true }
+
+            - name: Checksums
+              run: |
+                  set -euo pipefail
+                  cd artifacts
+                  for f in openusd-*.tar.gz; do
+                    echo "sha256:$(sha256sum "$f" | cut -d' ' -f1)  $f" >> checksum.txt
+                  done
+                  cat checksum.txt
+
+            - name: Publish release
+              uses: softprops/action-gh-release@v2
+              with:
+                  files: |
+                      artifacts/openusd-*.tar.gz
+                      artifacts/checksum.txt
