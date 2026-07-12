@@ -16,7 +16,7 @@ verifies it against `checksum.txt`, and unpacks it. Elixir-native — `elixir_ma
 
 ```elixir
 def deps do
-  [{:stage_runtime, "~> 26.5"}]
+  [{:stage_runtime, "~> 0.1.0-dev"}]
 end
 ```
 
