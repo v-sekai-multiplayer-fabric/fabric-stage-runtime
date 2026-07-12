@@ -57,16 +57,18 @@ jobs:
             - name: Set up sccache
               uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696
 
-            # The -gnu target builds with llvm-mingw (clang + mingw32-make),
-            # installed via scoop so it matches the toolchain cloth-fit uses.
+            # The -gnu target builds with llvm-mingw (clang + mingw32-make). Pull
+            # the official release directly (it bundles mingw32-make); this is the
+            # exact toolchain the -gnu recipe was validated against.
             - name: Set up llvm-mingw
               if: endsWith(matrix.target, 'windows-gnu')
               shell: pwsh
               run: |
-                  iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
-                  scoop install llvm-mingw
-                  Add-Content $env:GITHUB_PATH "$env:USERPROFILE\scoop\shims"
-                  Add-Content $env:GITHUB_PATH "$env:USERPROFILE\scoop\apps\llvm-mingw\current\bin"
+                  $ver = "20260616"
+                  $url = "https://github.com/mstorsjo/llvm-mingw/releases/download/$ver/llvm-mingw-$ver-ucrt-x86_64.zip"
+                  Invoke-WebRequest $url -OutFile "$env:RUNNER_TEMP\llvm-mingw.zip"
+                  Expand-Archive "$env:RUNNER_TEMP\llvm-mingw.zip" -DestinationPath "C:\" -Force
+                  Add-Content $env:GITHUB_PATH "C:\llvm-mingw-$ver-ucrt-x86_64\bin"
 
             - name: Build OpenUSD runtime
               shell: bash
